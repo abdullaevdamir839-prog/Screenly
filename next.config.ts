@@ -1,4 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img" aria-label="Иллюстрация категории vibe-coding">
-  <rect width="640" height="400" rx="26" fill="#F7F7F3"/>
-  <g><circle cx="512" cy="189" r="165" fill="#E7E9E4"/><circle cx="127" cy="298" r="77" fill="#EEEFEA"/><path d="M85 92 L145 67" stroke="#C8CDC8" stroke-width="3" stroke-linecap="round"/><circle cx="103" cy="86" r="6" fill="#B1B7B1"/><rect x="138" y="82" width="352" height="242" rx="18" fill="#FFFFFF" stroke="#161817" stroke-width="5" /><rect x="138" y="82" width="352" height="37" rx="15" fill="#EDEEEA" stroke="none" stroke-width="0" /><path d="M138 119 L490 119" stroke="#161817" stroke-width="3" stroke-linecap="round" fill="none" /><circle cx="160" cy="101" r="5" fill="#161817"/><circle cx="178" cy="101" r="5" fill="#737A76"/><circle cx="196" cy="101" r="5" fill="#737A76"/><text x="466" y="107" font-family="Arial, sans-serif" font-size="13" font-weight="600" fill="#737A76" text-anchor="end">AI WORKSPACE</text><rect x="159" y="147" width="223" height="147" rx="9" fill="#F7F7F3" stroke="none" stroke-width="0" /><rect x="175" y="164" width="104" height="10" rx="5.0" fill="#161817"/><text x="173" y="206" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#161817" >&lt;app&gt;</text><rect x="175" y="227" width="171" height="8" rx="4.0" fill="#C3C7C2"/><rect x="175" y="248" width="118" height="8" rx="4.0" fill="#737A76"/><rect x="175" y="270" width="148" height="8" rx="4.0" fill="#C3C7C2"/><rect x="405" y="151" width="100" height="94" rx="14" fill="#FFFFFF" stroke="#161817" stroke-width="4" /><circle cx="456" cy="181" r="18" fill="#EDEEEA" stroke="#161817" stroke-width="3"/><circle cx="451" cy="179" r="3" fill="#161817"/><circle cx="461" cy="179" r="3" fill="#161817"/><path d="M448 187 Q456 194 464 187" fill="none" stroke="#161817" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /><path d="M456 151 L456 143" stroke="#161817" stroke-width="3" stroke-linecap="round" fill="none" /><circle cx="456" cy="138" r="4" fill="#161817"/><rect x="411" y="259" width="84" height="27" rx="13" fill="#161817" stroke="#161817" stroke-width="0" /><text x="452" y="278" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF" text-anchor="middle">RUN</text><path d="M528 81 Q531 100 550 103 Q531 106 528 125 Q525 106 506 103 Q525 100 528 81 Z" fill="#FFFFFF" stroke="#161817" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><path d="M111 171 Q114 180 123 183 Q114 186 111 195 Q108 186 99 183 Q108 180 111 171 Z" fill="#FFFFFF" stroke="#161817" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><circle cx="94" cy="300" r="9" fill="#FFFFFF" stroke="#161817" stroke-width="2"/></g>
-</svg>
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  poweredByHeader: false,
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: [
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), display-capture=(self), geolocation=()' }
+      ]
+    }];
+  }
+};
+
+export default nextConfig;
