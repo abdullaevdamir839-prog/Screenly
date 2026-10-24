@@ -1,0 +1,31 @@
+# Create Render PostgreSQL separately, then paste its internal DATABASE_URL into the web service.
+# This blueprint intentionally does not provision resources or publish anything automatically.
+services:
+  - type: web
+    name: screenly-private-beta
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run db:init && npm run start:hosted
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SITE_ORIGIN
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: ALPHA_ACCESS_CODE
+        sync: false
+      - key: ALPHA_SESSION_SECRET
+        sync: false
+      - key: ROOM_SIGNING_SECRET
+        sync: false

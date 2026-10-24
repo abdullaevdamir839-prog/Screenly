@@ -1,0 +1,8 @@
+SCREENLY 1.3 — СВЕТЛО-ЧЁРНЫЕ КАТЕГОРИИ
+
+1. РАСПАКУЙ весь архив.
+2. Перенеси .env.local и data/screenly.json из Screenly 1.2 (или 1.1).
+3. Запусти START_SCREENLY.cmd.
+4. Открой http://localhost:3000/community → Творчество.
+5. Увидишь 12 крупных карточек, пока с графикой Lucide.
+6. Для иллюстраций unDraw смотри КАРТИНКИ_ИЗ_UNDRAW.txt.
