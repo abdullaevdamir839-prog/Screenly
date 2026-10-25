@@ -3,6 +3,8 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Use the TypeScript API instead of the CLI-based --showConfig path.
+  experimental: { useTypeScriptCli: false },
   async headers() {
     return [{
       source: '/:path*',

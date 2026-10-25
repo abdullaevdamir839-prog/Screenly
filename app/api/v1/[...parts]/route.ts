@@ -10,6 +10,7 @@ import * as gallery from '@/lib/projects.mjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 function reply(data: unknown, status=200){const r=NextResponse.json(data,{status});r.headers.set('Cache-Control','private, no-store');return r;}
+function userCookieOptions(){return {...accountCookieOptions(),sameSite:'strict' as const};}
 async function currentUser(){const ck=await cookies();return findAccount(ck.get(USER_COOKIE)?.value);}
 function needUser(user:any){if(!user)throw Object.assign(new Error('Нужен аккаунт'),{status:401});return user;}
 function needAdmin(user:any){if(!user||!['admin','moderator'].includes(user.role))throw Object.assign(new Error('Нет прав'),{status:403});return user;}
@@ -53,15 +54,15 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{parts:strin
  switch(path){
   case 'register':{
    if(limited('register:local',8,3600000))return reply({error:'Регистрация временно ограничена'},429);
-   out=a.register(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,accountCookieOptions());return res;
+   out=a.register(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,userCookieOptions());return res;
   }
   case 'login':{
    if(limited('user-login:local',15,600000))return reply({error:'Слишком много попыток'},429);
-   out=a.login(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,accountCookieOptions());return res;
+   out=a.login(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,userCookieOptions());return res;
   }
   case 'logout':{
    const token=(await cookies()).get(USER_COOKIE)?.value;deleteSession(token);
-   const res=reply({ok:true});res.cookies.set(USER_COOKIE,'',{...accountCookieOptions(),maxAge:0});return res;
+   const res=reply({ok:true});res.cookies.set(USER_COOKIE,'',{...userCookieOptions(),maxAge:0});return res;
   }
   case 'profile':return reply({user:a.editProfile(needUser(user).id,b)});
   case 'friend/request':return reply(a.requestFriend(needUser(user).id,b.username));
@@ -98,7 +99,7 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{parts:strin
   case 'account/delete':{
    needUser(user);
    if(b.confirm!==user.username) return reply({error:'Введи свой ник для подтверждения удаления'},400);
-   out=a.deleteAccount(user.id);const res=reply(out);res.cookies.set(USER_COOKIE,'',{...accountCookieOptions(),maxAge:0});return res;
+   out=a.deleteAccount(user.id);const res=reply(out);res.cookies.set(USER_COOKIE,'',{...userCookieOptions(),maxAge:0});return res;
   }
   default:return reply({error:'Неизвестный маршрут'},404);
  }

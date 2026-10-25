@@ -42,7 +42,7 @@ export default function CreatorHub({onCreate}:{onCreate:(category:string)=>void}
   finally{setLoading(false);}
  },[]);
  useEffect(()=>{void refresh();const interval=setInterval(()=>void refresh(),30000);return()=>clearInterval(interval);},[refresh]);
- const visible=useMemo(()=>filterRooms(rooms,{category,goal,query}),[rooms,category,goal,query]);
+ const visible: Room[]=useMemo(()=>filterRooms(rooms,{category,goal,query}),[rooms,category,goal,query]);
  const selected=getCategory(category);
  const activeIdeas=ideas[category]||['Покажите, над чем работаете','Проведите мини-урок','Разберите проект с друзьями'];
  return <div className="hub">
