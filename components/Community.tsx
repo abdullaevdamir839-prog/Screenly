@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreatorHub from './CreatorHub';
 import ProjectGallery from './ProjectGallery';
+import TurnstileWidget from './TurnstileWidget';
 import { CATEGORIES, GOALS, getCategory, getGoal } from '@/lib/creator-categories.mjs';
 import {
  ArrowRight, Bell, Check, ChevronRight, Compass, DoorOpen, Eye, FileWarning,
@@ -35,6 +36,8 @@ export default function Community(){
  const [email,setEmail]=useState('');const [password,setPassword]=useState('');
  const [username,setUsername]=useState('');const [displayName,setDisplayName]=useState('');const [ageBand,setAgeBand]=useState('13-17');const [agree,setAgree]=useState(false);
  const [error,setError]=useState('');const [notice,setNotice]=useState('');const [busy,setBusy]=useState(false);
+ const [turnstileToken,setTurnstileToken]=useState('');const [turnstileReset,setTurnstileReset]=useState(0);
+ const sitekey=process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
  const [rooms,setRooms]=useState<Room[]>([]),[mine,setMine]=useState<Room[]>([]);
  const [roomTitle,setRoomTitle]=useState('Моя мастерская'),[roomCategory,setRoomCategory]=useState('vibe-coding'),[roomGoal,setRoomGoal]=useState('showcase'),[roomDescription,setRoomDescription]=useState('');
  const [projectTitle,setProjectTitle]=useState(''),[projectUrl,setProjectUrl]=useState(''),[learningPlan,setLearningPlan]=useState('');
@@ -70,8 +73,11 @@ export default function Community(){
  },[tab,peer?.id]);
  async function action(fn:()=>Promise<unknown>,after?:()=>Promise<unknown>|void){setBusy(true);setError('');setNotice('');try{await fn();await after?.();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function authenticate(event:React.FormEvent){event.preventDefault();await action(async()=>{
-  await api(authMode==='register'?'register':'login',authMode==='register'?{email,password,username,displayName,ageBand,agree}:{email,password});
-  await syncMe();setPassword('');setNotice('Добро пожаловать в Screenly!');
+  if(authMode==='register'&&sitekey&&!turnstileToken)throw new Error('Дождись проверки на человека.');
+  try {
+   await api(authMode==='register'?'register':'login',authMode==='register'?{email,password,username,displayName,ageBand,agree,turnstileToken}:{email,password});
+   await syncMe();setPassword('');setNotice('Добро пожаловать в Screenly!');
+  } finally {if(authMode==='register'){setTurnstileToken('');setTurnstileReset(n=>n+1);}}
  });}
  async function signOut(){await action(async()=>{await api('logout',{});setMe(null);setPeer(null);});}
  async function makeRoom(){await action(async()=>{const v=await api('rooms/create',{title:roomTitle,category:roomCategory,goal:roomGoal,description:roomDescription,projectTitle,projectUrl,learningPlan,visibility:roomPublic?'public':'private'});router.push(v.path);});}
@@ -99,7 +105,8 @@ export default function Community(){
     <label>Пароль<input type="password" required minLength={authMode==='register'?12:1} autoComplete={authMode==='register'?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={authMode==='register'?'Минимум 12 символов':'Твой пароль'}/></label>
     {authMode==='register'&&<><label>Возрастная группа<select value={ageBand} onChange={e=>setAgeBand(e.target.value)}><option value="18+">18 лет и старше</option><option value="13-17">13–17 лет</option></select></label>
      <label className="social-check"><input type="checkbox" checked={agree} onChange={e=>setAgree(e.target.checked)}/> Согласен с правилами закрытого тестирования. Возрастная категория пока не считается проверенной.</label></>}
-    <button type="submit" className="social-primary" disabled={busy}>{busy?'Проверяем…':authMode==='register'?'Создать аккаунт':'Войти'} <ArrowRight size={17}/></button>
+    {authMode==='register'&&sitekey&&<TurnstileWidget sitekey={sitekey} onToken={setTurnstileToken} resetKey={turnstileReset}/>}
+    <button type="submit" className="social-primary" disabled={busy||(authMode==='register'&&!!sitekey&&!turnstileToken)}>{busy?'Проверяем…':authMode==='register'?'Создать аккаунт':'Войти'} <ArrowRight size={17}/></button>
     <ErrorMessage error={error}/>
    </form></main> : <div className="social-layout">
    <aside className="social-nav"><div className="social-user-card"><Avatar u={me} size={45}/><div><strong>{me.displayName}</strong><small>@{me.username}</small></div></div>

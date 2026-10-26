@@ -10,6 +10,7 @@ import * as a from '@/lib/actions.mjs';
 import * as gallery from '@/lib/projects.mjs';
 import { boundedJson } from '@/lib/request-body.mjs';
 import { disconnectClosedRoom } from '@/lib/livekit-admin.mjs';
+import { verifyTurnstile } from '@/lib/turnstile.mjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 function reply(data: unknown, status=200){const r=NextResponse.json(data,{status});r.headers.set('Cache-Control','private, no-store');return r;}
@@ -70,6 +71,7 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{parts:strin
  switch(path){
   case 'register':{
    if(limited(`register:${typeof b.email==='string'?b.email.trim().toLowerCase().slice(0,160):'invalid'}`,5,3600000)||limited('register:global',120,3600000))return reply({error:'Регистрация временно ограничена'},429);
+   if(!await verifyTurnstile(b.turnstileToken))return reply({error:'Не удалось подтвердить проверку на человека. Повтори попытку.'},403);
    out=a.register(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,userCookieOptions());return res;
   }
   case 'login':{
