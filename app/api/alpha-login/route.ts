@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAlphaCode, createSession, limited, sameOrigin } from '@/lib/security.mjs';
 import { requireSettings, SESSION_COOKIE } from '@/lib/server';
+import { boundedJson } from '@/lib/request-body.mjs';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   try { settings = requireSettings(); }
   catch { return NextResponse.json({ error: 'Сервер не настроен. Проверьте .env.local.' }, { status: 503 }); }
   let body: unknown;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: 'Неверный формат запроса' }, { status: 400 }); }
+  try { body = await boundedJson(req, 2048); } catch(e) { return NextResponse.json({ error: 'Неверный формат запроса' }, { status: (e as {status?:number}).status||400 }); }
   const code = (body && typeof body === 'object' && 'code' in body) ? (body as { code: unknown }).code : null;
   if (!checkAlphaCode(code, settings.alphaCode)) return NextResponse.json({ error: 'Неверный код доступа' }, { status: 401 });
   const res = NextResponse.json({ ok: true });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseCollabPacket,encodeCollabPacket,applyStroke,MAX_STROKES_PER_STREAM,MAX_POINTS_PER_STROKE} from '../lib/collaboration.mjs';
+import {parseCollabPacket,encodeCollabPacket,applyStroke,undoStroke,MAX_STROKES_PER_STREAM,MAX_POINTS_PER_STROKE} from '../lib/collaboration.mjs';
 const parse=(data,sender='owner')=>parseCollabPacket(encodeCollabPacket(data),sender);
 test('valid owner permission and revoke events',()=>{
   assert.equal(parse({type:'permission',stream:'owner',enabled:true}).enabled,true);
@@ -39,3 +39,12 @@ test('owner snapshot is capped and cannot inject strokes',()=>{
   assert.equal(parse({type:'snapshot',stream:'owner',strokes:[]},'peer'),null);
 });
 test('hello is independent of screen state',()=>assert.equal(parse({type:'hello'},'someone').type,'hello'));
+test('undo removes only the exact author stroke, never another participant drawing',()=>{
+ const first={sender:'alice',id:'one',key:'alice:one',points:[[.2,.2]]};
+ const second={sender:'bob',id:'one',key:'bob:one',points:[[.5,.5]]};
+ assert.deepEqual(undoStroke([first,second],'alice','one'),[second]);
+ assert.deepEqual(undoStroke([first,second],'alice','missing'),[first,second]);
+ const packet=parse({type:'undo',stream:'owner',id:'one'},'alice');
+ assert.equal(packet.sender,'alice');
+ assert.equal(parse({type:'undo',stream:'owner',id:'<bad>'},'alice'),null);
+});

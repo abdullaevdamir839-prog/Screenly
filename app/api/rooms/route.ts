@@ -17,5 +17,5 @@ export async function POST(req:NextRequest){
   const out=createRoom(user?.id || `guest:${randomUUID()}`,{title:'Ваше пространство'},!user);
   return NextResponse.json(out,{headers:{'Cache-Control':'no-store'}});
  }, {write:true});
- }catch(error){const e=error as Error & {status?:number};return NextResponse.json({error:e.message||'Ошибка комнаты'},{status:e.status||503});}
+ }catch(error){const e=error as Error & {status?:number};const status=(e.status??0)>=400&&(e.status??0)<500?e.status!:503;if(status===503)console.error('[screenly:rooms] Request failed:',e);return NextResponse.json({error:status===503?'Сервер временно недоступен':e.message||'Ошибка комнаты'},{status});}
 }

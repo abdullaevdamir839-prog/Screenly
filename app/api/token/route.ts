@@ -7,17 +7,19 @@ import { ROOM_ID_PATTERN, limited, sameOrigin } from '@/lib/security.mjs';
 import { isAuthorized, requireSettings } from '@/lib/server';
 import { USER_COOKIE, findAccount } from '@/lib/accounts.mjs';
 import { roomAccess } from '@/lib/actions.mjs';
+import { boundedJson } from '@/lib/request-body.mjs';
 export const runtime='nodejs';
 export async function POST(req:NextRequest){
  try {
  return await withDatabase(async () => {
   if(!sameOrigin(req))return NextResponse.json({error:'Недопустимый источник'},{status:403});
   if(!await isAuthorized())return NextResponse.json({error:'Нужен код тестировщика'},{status:401});
-  if(limited('livekit-token:local',60,60000))return NextResponse.json({error:'Лимит подключений'},{status:429});
   const cfg=requireSettings();
-  const b=await req.json();
+  const b=await boundedJson(req,4096);
   if(typeof b.roomId!=='string'||!ROOM_ID_PATTERN.test(b.roomId))return NextResponse.json({error:'Неверная комната'},{status:400});
   const user=findAccount((await cookies()).get(USER_COOKIE)?.value);
+  const rateKey=user?.id||req.headers.get('x-real-ip')||'guest';
+  if(limited(`livekit-token:${rateKey}`,20,60000)||limited('livekit-token:global',600,60000))return NextResponse.json({error:'Лимит подключений'},{status:429});
   const room=roomAccess(b.roomId,b.invite,user);
   const name=user?.displayName || (typeof b.name==='string'?b.name.replace(/[\x00-\x1f\x7f]/g,'').trim().slice(0,28):'');
   if(name.length<2)return NextResponse.json({error:'Укажи имя не короче 2 символов'},{status:400});
@@ -26,5 +28,5 @@ export async function POST(req:NextRequest){
   const res=NextResponse.json({token:await access.toJwt(),serverUrl:cfg.livekitUrl,roomTitle:room.title});
   res.headers.set('Cache-Control','no-store');return res;
  }, {write:false});
- }catch(error){const e=error as Error & {status?:number};return NextResponse.json({error:e.message||'Ошибка подключения'},{status:e.status||503});}
+ }catch(error){const e=error as Error & {status?:number};const status=(e.status??0)>=400&&(e.status??0)<500?e.status!:503;if(status===503)console.error('[screenly:token] Request failed:',e);return NextResponse.json({error:status===503?'Сервер временно недоступен':e.message||'Ошибка подключения'},{status});}
 }

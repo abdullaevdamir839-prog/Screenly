@@ -2,7 +2,7 @@
 
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {RoomEvent, type Room} from 'livekit-client';
-import {applyStroke,COLLAB_TOPIC,encodeCollabPacket,parseCollabPacket,MAX_PACKET_BYTES} from '@/lib/collaboration.mjs';
+import {applyStroke,undoStroke,COLLAB_TOPIC,encodeCollabPacket,parseCollabPacket,MAX_PACKET_BYTES} from '@/lib/collaboration.mjs';
 
 export type InkStroke={key:string;id:string;sender:string;points:number[][]};
 export type RemoteCursor={sender:string;stream:string;x:number;y:number;updated:number;visible:boolean};
@@ -83,6 +83,8 @@ export function useRoomCollaboration(room:Room, activeScreenOwners:string[]) {
         setCursors(prev=>({...prev,[key]:{sender:packet.sender,stream:packet.stream,x:packet.x,y:packet.y,updated:now,visible:packet.visible}}));
       } else if(packet.type==='stroke') {
         updateStrokes(prev=>({...prev,[packet.stream]:applyStroke(prev[packet.stream],packet)}));
+      } else if(packet.type==='undo') {
+        updateStrokes(prev=>({...prev,[packet.stream]:undoStroke(prev[packet.stream],packet.sender,packet.id)}));
       } else if(packet.type==='snapshot') {
         updateStrokes(prev=>{
           const prior=prev[packet.stream]||[];
@@ -147,5 +149,13 @@ export function useRoomCollaboration(room:Room, activeScreenOwners:string[]) {
     clearLocalStream(stream);
     void dispatch({type:'clear',stream},true).catch(()=>{});
   },[room,dispatch,clearLocalStream]);
-  return {permissions,strokes,cursors,tool,setTool,allowAnnotations,publishCursor,publishStroke,clearDrawing};
+  const undoMyStroke=useCallback((stream:string)=>{
+    if(!ownersRef.current.has(stream)||!permissionsRef.current[stream])return;
+    const sender=room.localParticipant.identity;
+    const own=[...(strokesRef.current[stream]||[])].reverse().find(s=>s.sender===sender);
+    if(!own)return;
+    updateStrokes(prev=>({...prev,[stream]:undoStroke(prev[stream],sender,own.id)}));
+    void dispatch({type:'undo',stream,id:own.id},true).catch(()=>{});
+  },[room,dispatch,updateStrokes]);
+  return {permissions,strokes,cursors,tool,setTool,allowAnnotations,publishCursor,publishStroke,clearDrawing,undoMyStroke};
 }

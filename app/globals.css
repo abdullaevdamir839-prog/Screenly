@@ -186,3 +186,48 @@
 .collab-tile-compact .collab-tile-heading{font-size:10px;min-height:33px;}
 .collab-tile-compact .collab-tile-heading>span+span{font-size:9px;}
 @media(max-width:700px){.collab-screen-grid-multi{grid-template-columns:1fr;}.collab-mode-bar{align-items:flex-start;flex-direction:column;}.collab-toolbar-head{display:grid;gap:4px;}.collab-toolbar-actions button.collab-clear{margin-left:0;}}
+
+/* Screenly 1.8 — invitations, host tools and compact touch layouts. */
+.room-invite-row{flex-wrap:wrap;}
+.room-invite-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:1 0 100%;}
+.room-invite-controls select{min-width:0;max-width:240px;padding:9px 11px;border:1px solid #e4e4e8;background:#fff;border-radius:9px;color:#333;}
+.room-invite-controls button,.members-heading-toggle{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e4e4e8;border-radius:9px;padding:9px 12px;font-weight:700;font-size:12px;color:#333;cursor:pointer;}
+.room-invite-controls button:disabled{opacity:.45;cursor:not-allowed;}
+.host-badge{display:inline-flex;gap:5px;align-items:center;margin-left:9px;font-size:10px;color:#325a44;background:#eaf7ee;padding:5px 8px;border-radius:16px;}
+.room-end-button{border:1px solid #f0dddd!important;background:#fff8f8!important;color:#9a3030!important;}
+.members-heading-toggle{width:100%;justify-content:space-between;border:0;padding:4px 0 12px;margin-bottom:5px;}
+.members-heading-toggle>span:last-child{color:#777;font-weight:500;}
+button,a,input,select,textarea{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease;}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #7870e9;outline-offset:2px;}
+@media(max-width:720px){
+ .room-header{gap:9px;flex-wrap:wrap;}.room-header-center{order:3;width:100%;justify-content:flex-start;}
+ .room-controls,.room-controls-primary,.room-controls-right{flex-wrap:wrap;gap:8px;}
+ .room-controls-primary{width:100%;}.room-controls-primary>*{flex:1 1 155px;}
+ .room-controls-right{width:100%;justify-content:space-between;}.room-controls-right>*{flex:1 1 auto;}
+ .room-end-button span{font-size:11px;}.host-badge{margin-left:0;}
+ .social-header,.social-head-right{gap:8px;}.social-head-right strong{display:none;}
+ .social-nav{overflow-x:auto;}.room-invite-controls{justify-content:flex-start;flex-wrap:wrap;}
+ .room-invite-controls select{flex:1 1 135px;max-width:none;}.room-invite-controls button{flex:1 1 135px;justify-content:center;}
+}
+@media(prefers-reduced-motion:reduce){button,a,input,select,textarea{transition:none!important;}}
+
+/* Screenly 1.9 — shared-workshop focus and connection feedback. */
+.room-connection-alert{margin:9px 0 15px;border:1px solid #edcf9d;background:#fff7e9;color:#815313;padding:11px 15px;border-radius:12px;font-size:12px;font-weight:650;}
+.stage-fullscreen{border:0;background:transparent;color:#555;display:inline-flex;align-items:center;justify-content:center;padding:7px;border-radius:8px;cursor:pointer;}
+.stage-fullscreen:hover{background:#ececec;}
+.collab-stage:fullscreen{background:#161616;display:flex;flex-direction:column;justify-content:center;}
+.collab-stage:fullscreen .collab-screen-grid,.collab-stage:fullscreen .stage-video{flex:1;min-height:0;display:grid;align-content:center;}
+.collab-stage:fullscreen .collab-video-area{max-height:calc(100vh - 95px);}
+.collab-stage:fullscreen .stage-toolbar{background:#fff;}
+.room-unread{display:inline-flex;min-width:19px;height:19px;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:750;border-radius:11px;background:#e04b62;color:#fff;}
+@media(max-width:700px){.room-connection-alert{font-size:11px;}.stage-fullscreen{padding:5px;}.collab-toolbar-actions button{min-height:38px;}}
+
+/* Desktop-first closed beta. Mobile notice matches the neutral Screenly palette. */
+.desktop-mobile-notice{display:none;}
+.desktop-only-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f4f4f3;color:#191919;}
+.desktop-only-card{position:relative;width:min(100%,470px);min-height:440px;background:#fff;border:1px solid #e6e6e7;border-radius:23px;padding:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:0 15px 45px rgba(0,0,0,.035);}
+.desktop-only-brand{align-self:flex-start;position:absolute;top:24px;left:28px;font-size:21px;font-weight:800;letter-spacing:-1px;}
+.desktop-only-brand span{color:#6864df;}.desktop-only-icon{display:flex;align-items:center;justify-content:center;width:86px;height:86px;border-radius:25px;background:#f1f0ff;color:#6159d6;margin-bottom:24px;}
+.desktop-only-kicker{font-size:11px;font-weight:800;letter-spacing:1.8px;color:#75718c;}.desktop-only-card h1{font-size:29px;line-height:1.2;letter-spacing:-1px;margin:12px 0;max-width:350px;}.desktop-only-card p{color:#777;font-size:14px;line-height:1.65;max-width:340px;}
+.desktop-only-foot{display:flex;align-items:center;gap:7px;color:#777;font-size:12px;margin-top:27px;}
+@media(max-width:800px){.desktop-app{display:none!important;}.desktop-mobile-notice{display:block;}}

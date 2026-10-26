@@ -1,6 +1,6 @@
 {
   "name": "screenly",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
@@ -12,6 +12,7 @@
     "admin": "node scripts/admin.mjs",
     "art:sync": "node scripts/sync-category-art.mjs",
     "db:init": "node scripts/db-init.mjs",
+    "db:backup": "node scripts/db-backup.mjs",
     "db:import": "node scripts/db-import.mjs",
     "start:hosted": "node scripts/start-hosted.mjs"
   },

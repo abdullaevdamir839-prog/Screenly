@@ -13,9 +13,10 @@ import {
 
 type User={id:string;username:string;displayName:string;bio:string;ageBand:string;adultVerified:boolean;role:string;interests:string[];language:string;avatarColor:string;createdAt:number};
 type FriendRequest={id:string;from:User;to:User;status:string};
+type RoomInvite={id:string;at:number;roomTitle:string;from:User;url:string};
 type Room={id:string;title:string;topic:string;description?:string;category?:string;goal?:string;projectTitle?:string;projectUrl?:string;learningPlan?:string;visibility?:string;url:string;owner?:User};
 type ChatMessage={id:string;from:string;to:string;text:string;at:number};
-const tabs=[['discover','Творчество',Sparkles],['projects','Галерея работ',Heart],['rooms','Комнаты',MonitorPlay],['roulette','Рулетка',Shuffle],['friends','Друзья',Users],['messages','Сообщения',MessageCircle],['profile','Мой профиль',UserRound],['safety','Безопасность',Shield]] as const;
+const tabs=[['discover','Творчество',Sparkles],['projects','Галерея работ',Heart],['rooms','Комнаты',MonitorPlay],['roulette','Рулетка',Shuffle],['friends','Друзья',Users],['invites','Уведомления',Bell],['messages','Сообщения',MessageCircle],['profile','Мой профиль',UserRound],['safety','Безопасность',Shield]] as const;
 const formatDate=(n:number)=>new Date(n).toLocaleString('ru-RU',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'});
 async function api(path:string,body?:any){
  const res=await fetch('/api/v1/'+path,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -39,6 +40,7 @@ export default function Community(){
  const [projectTitle,setProjectTitle]=useState(''),[projectUrl,setProjectUrl]=useState(''),[learningPlan,setLearningPlan]=useState('');
  const [roomPublic,setRoomPublic]=useState(false);
  const [friends,setFriends]=useState<User[]>([]),[incoming,setIncoming]=useState<FriendRequest[]>([]),[outgoing,setOutgoing]=useState<FriendRequest[]>([]),[blocked,setBlocked]=useState<User[]>([]);
+ const [invites,setInvites]=useState<RoomInvite[]>([]),[inviteFriend,setInviteFriend]=useState<Record<string,string>>({});
  const [search,setSearch]=useState(''),[searchResults,setSearchResults]=useState<User[]>([]);
  const [threads,setThreads]=useState<{peer:User;last?:{text:string;at:number}}[]>([]),[peer,setPeer]=useState<User|null>(null),[messages,setMessages]=useState<ChatMessage[]>([]),[text,setText]=useState('');
  const [profileName,setProfileName]=useState(''),[profileBio,setProfileBio]=useState(''),[profileLanguage,setProfileLanguage]=useState('ru'),[profileInterests,setProfileInterests]=useState('');
@@ -51,12 +53,14 @@ export default function Community(){
   try {
    if(section==='rooms'){const data=await api('rooms');setRooms(data.rooms);setMine(data.mine);}
    if(section==='friends' || section==='safety'){const data=await api('friends');setFriends(data.friends);setIncoming(data.incoming);setOutgoing(data.outgoing);setBlocked(data.blocked);}
+   if(section==='invites'){setInvites((await api('invites')).invites);}
    if(section==='messages'){const data=await api('threads');setThreads(data.threads);}
    if(section==='roulette'){setMatch(await api('match'));}
    if(section==='admin'){setReports((await api('moderation')).reports);}
   }catch(e){setError((e as Error).message);}
  }
  useEffect(()=>{if(me)void load(tab);},[tab,me?.id]);
+ useEffect(()=>{if(!me)return;const update=()=>{api('invites').then(v=>setInvites(v.invites)).catch(()=>{});api('friends').then(v=>{setFriends(v.friends);setIncoming(v.incoming);}).catch(()=>{});};update();const timer=setInterval(update,20000);return ()=>clearInterval(timer);},[me?.id]);
  useEffect(()=>{if(tab!=='roulette'||match.status!=='waiting'||!me)return;
   const timer=setInterval(()=>{api('match').then(v=>{setMatch(v);if(v.status==='matched'&&v.path)router.push(v.path);}).catch(e=>setError(e.message));},2800);
   return ()=>clearInterval(timer);},[tab,match.status,me?.id]);
@@ -79,7 +83,7 @@ export default function Community(){
  if(me===undefined)return <div className="social-loading"><LoaderCircle className="spin"/> Загружаем Screenly…</div>;
  return <div className="social-page">
   <header className="social-header"><a href="/" className="brand"><span className="brand-mark"><MonitorPlay size={20}/></span>screenly<span className="brand-dot">.</span></a>
-   <div className="social-head-center"><span className="mini-dot"/> PRIVATE PREVIEW · 1.5</div>
+   <div className="social-head-center"><span className="mini-dot"/> PRIVATE RELEASE · 2.0</div>
    <div className="social-head-right"><a href="/">Главная</a>{me?<><Avatar u={me} size={32}/><strong>{me.displayName}</strong><button onClick={signOut} title="Выйти"><LogOut size={17}/></button></>:<span>Гостевой доступ</span>}</div>
   </header>
   {!me ? <main className="social-auth-wrap">
@@ -100,12 +104,12 @@ export default function Community(){
    </form></main> : <div className="social-layout">
    <aside className="social-nav"><div className="social-user-card"><Avatar u={me} size={45}/><div><strong>{me.displayName}</strong><small>@{me.username}</small></div></div>
     <p className="social-nav-label">ПРОСТРАНСТВО</p>
-    {tabs.map(([key,label,Icon])=><button key={key} className={tab===key?'active':''} onClick={()=>{setTab(key);setError('');setNotice('');}}><Icon size={18}/>{label}{key==='friends'&&incoming.length>0&&<span className="social-count">{incoming.length}</span>}</button>)}
+    {tabs.map(([key,label,Icon])=><button key={key} className={tab===key?'active':''} onClick={()=>{setTab(key);setError('');setNotice('');}}><Icon size={18}/>{label}{key==='friends'&&incoming.length>0&&<span className="social-count">{incoming.length}</span>}{key==='invites'&&invites.length>0&&<span className="social-count">{invites.length}</span>}</button>)}
     {['admin','moderator'].includes(me.role)&&<button className={tab==='admin'?'active':''} onClick={()=>setTab('admin')}><FileWarning size={18}/> Модерация</button>}
     <div className="social-nav-bottom"><ShieldCheck size={16}/> Закрытая версия. Никакой записи звонков.</div>
    </aside>
    <main className="social-main">
-    <div className="social-pagehead"><div><span className="social-overline"><span className="mini-dot"/> SCREENLY 1.5</span><h1>{({discover:'Мастерские и проекты',projects:'Галерея работ',rooms:'Трансляции и комнаты',roulette:'Случайная встреча',friends:'Твои люди',messages:'Сообщения',profile:'Мой профиль',safety:'Конфиденциальность',admin:'Центр модерации'} as any)[tab]}</h1><p>{({discover:'Показывай работы, учись и создавай вместе с другими.',projects:'Портфолио, разборы и настоящая обратная связь.',rooms:'Собери друзей, показывай экран и общайся.',roulette:'Поиск собеседника по интересам с защитой участников.',friends:'Люди, с которыми хочется остаться на связи.',messages:'Личная переписка без лишнего шума.',profile:'Покажи, чем ты увлекаешься.',safety:'Управляй доступом и своими данными.',admin:'Рассмотрение жалоб и защита сообщества.'} as any)[tab]}</p></div>
+    <div className="social-pagehead"><div><span className="social-overline"><span className="mini-dot"/> SCREENLY 2.0</span><h1>{({discover:'Мастерские и проекты',projects:'Галерея работ',rooms:'Трансляции и комнаты',roulette:'Случайная встреча',friends:'Твои люди',invites:'Уведомления',messages:'Сообщения',profile:'Мой профиль',safety:'Конфиденциальность',admin:'Центр модерации'} as any)[tab]}</h1><p>{({discover:'Показывай работы, учись и создавай вместе с другими.',projects:'Портфолио, разборы и настоящая обратная связь.',rooms:'Собери друзей, показывай экран и общайся.',roulette:'Поиск собеседника по интересам с защитой участников.',friends:'Люди, с которыми хочется остаться на связи.',invites:'Приглашения друзей в мастерские и эфиры.',messages:'Личная переписка без лишнего шума.',profile:'Покажи, чем ты увлекаешься.',safety:'Управляй доступом и своими данными.',admin:'Рассмотрение жалоб и защита сообщества.'} as any)[tab]}</p></div>
      <div className="social-pagehead-tag"><ShieldCheck size={16}/>{me.ageBand==='13-17'?'13+ · тестовый режим':'18+ · тестовый режим'}</div></div>
     {error&&<div className="social-error" role="alert">{error}<button onClick={()=>setError('')}><X size={14}/></button></div>}
     {notice&&<div className="social-notice"><Check size={16}/>{notice}</div>}
@@ -123,12 +127,13 @@ export default function Community(){
        <button className="social-primary" onClick={makeRoom} disabled={busy}>Создать комнату <ArrowRight size={17}/></button>
       </section>
       <section className="social-panel"><div className="social-panel-head"><h2>Мои комнаты</h2><button className="social-text-btn" onClick={()=>load('rooms')}>Обновить</button></div>
-       {mine.length?mine.map(r=><div className="social-list-row" key={r.id}><span className="social-row-ico"><MonitorPlay size={17}/></span><div><strong>{r.title}</strong><small>{getCategory(r.category)?.label||r.topic} · {getGoal(r.goal)?.label||'Общение'} · {r.visibility==='public'?'Открытая':'По приглашению'}</small></div><a href={r.url} className="social-small-primary">Открыть <ArrowRight size={15}/></a><button title="Закрыть комнату" onClick={()=>action(()=>api('rooms/close',{roomId:r.id}),()=>load('rooms'))}><X size={16}/></button></div>):<p className="social-empty">Пока нет созданных комнат. Создай первую!</p>}
+       {mine.length?mine.map(r=><div className="social-list-row room-invite-row" key={r.id}><span className="social-row-ico"><MonitorPlay size={17}/></span><div><strong>{r.title}</strong><small>{getCategory(r.category)?.label||r.topic} · {getGoal(r.goal)?.label||'Общение'} · {r.visibility==='public'?'Открытая':'По приглашению'}</small></div><a href={r.url} className="social-small-primary">Открыть <ArrowRight size={15}/></a><button title="Закрыть комнату" onClick={()=>{if(window.confirm('Закрыть комнату для новых подключений?'))void action(()=>api('rooms/close',{roomId:r.id}),()=>load('rooms'));}}><X size={16}/></button>{friends.length>0&&<div className="room-invite-controls"><select aria-label="Кого пригласить" value={inviteFriend[r.id]||''} onChange={e=>setInviteFriend(prev=>({...prev,[r.id]:e.target.value}))}><option value="">Выбери друга</option>{friends.map(f=><option value={f.id} key={f.id}>{f.displayName}</option>)}</select><button disabled={busy||!inviteFriend[r.id]} onClick={()=>action(()=>api('rooms/invite',{roomId:r.id,friendId:inviteFriend[r.id]}),()=>setNotice('Приглашение отправлено'))}><Send size={15}/> Пригласить</button></div>}</div>):<p className="social-empty">Пока нет созданных комнат. Создай первую!</p>}
       </section></div>
       <section className="social-panel social-catalog"><div className="social-panel-head"><div><h2>Каталог эфиров</h2><p>Публичные комнаты участников твоей возрастной группы.</p></div><Compass size={21}/></div>
       {discoveryEnabled?rooms.length?rooms.map(r=><div className="social-roomcard" key={r.id}><div className="social-roompreview"><MonitorPlay size={26}/><span>{getCategory(r.category)?.label||r.topic} / {getGoal(r.goal)?.label||'Общение'}</span></div><div className="social-roomcard-bottom"><strong>{r.title}</strong><small>{r.projectTitle?`Проект: ${r.projectTitle} · `:''}{r.description||'Совместная трансляция и общение'}</small><div><Avatar u={r.owner} size={26}/><span>{r.owner?.displayName}</span><a href={r.url}>Войти <ArrowRight size={15}/></a></div></div></div>):<div className="social-empty-illustration"><MonitorPlay size={34}/><strong>Сейчас нет публичных эфиров</strong><p>Они появятся, когда кто-нибудь из твоей возрастной группы создаст публичную комнату.</p></div>:
       <div className="social-empty-illustration"><LockKeyhole size={34}/><strong>Каталог временно закрыт</strong><p>Чтобы видеть доступные комнаты, войди в зарегистрированный аккаунт. Приватные комнаты работают по приглашению.</p></div>}
       </section></div>}
+    {tab==='invites'&&<section className="social-panel"><div className="social-panel-head"><div><h2>Приглашения в комнаты</h2><p>Приглашения приходят от друзей твоей возрастной группы. Список обновляется автоматически.</p></div><button className="social-text-btn" onClick={()=>load('invites')}>Обновить</button></div>{invites.length?invites.map(i=><div className="social-list-row" key={i.id}><Avatar u={i.from}/><div><strong>{i.from.displayName} приглашает в «{i.roomTitle}»</strong><small>{formatDate(i.at)}</small></div><a className="social-small-primary" href={i.url}>Войти <ArrowRight size={15}/></a><button title="Отклонить" onClick={()=>action(()=>api('invites/dismiss',{inviteId:i.id}),()=>load('invites'))}><X size={16}/></button></div>):<p className="social-empty">Новых приглашений пока нет.</p>}</section>}
     {tab==='roulette'&&<section className="social-panel social-match-panel"><span className="social-big-icon"><Shuffle size={36}/></span><h2>Найти собеседника</h2><p>Выбирай тему и находи собеседника из своей возрастной группы. Можно обсуждать идеи, показывать работы и учиться вместе.</p>
      {discoveryEnabled?<><label className="social-match-filter">Тема знакомства<select value={matchCategory} disabled={match.status==='waiting'} onChange={e=>setMatchCategory(e.target.value)}><option value="all">Любая тема</option>{CATEGORIES.map(c=><option value={c.id} key={c.id}>{c.label}</option>)}</select></label><div className="social-match-status"><span className="mini-dot"/> {match.status==='waiting'?'Ищем человека…':match.status==='matched'?'Собеседник найден':'Можно начать поиск'}</div>
       {match.status==='waiting'?<button className="social-secondary" onClick={()=>action(async()=>{await api('match/cancel',{});setMatch({status:'idle'});})}>Отменить поиск</button>:<button className="social-primary" disabled={busy} onClick={()=>action(async()=>{const m=await api('match/join',{category:matchCategory});setMatch(m);if(m.path)router.push(m.path);})}>Найти человека <ArrowRight size={18}/></button>}</>:

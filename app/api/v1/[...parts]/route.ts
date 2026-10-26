@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { isAuthorized } from '@/lib/server';
 import { sameOrigin, limited } from '@/lib/security.mjs';
@@ -7,6 +8,8 @@ import { USER_COOKIE, accountCookieOptions, findAccount, deleteSession } from '@
 import { withDatabase, publicUser } from '@/lib/store.mjs';
 import * as a from '@/lib/actions.mjs';
 import * as gallery from '@/lib/projects.mjs';
+import { boundedJson } from '@/lib/request-body.mjs';
+import { disconnectClosedRoom } from '@/lib/livekit-admin.mjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 function reply(data: unknown, status=200){const r=NextResponse.json(data,{status});r.headers.set('Cache-Control','private, no-store');return r;}
@@ -14,17 +17,18 @@ function userCookieOptions(){return {...accountCookieOptions(),sameSite:'strict'
 async function currentUser(){const ck=await cookies();return findAccount(ck.get(USER_COOKIE)?.value);}
 function needUser(user:any){if(!user)throw Object.assign(new Error('Нужен аккаунт'),{status:401});return user;}
 function needAdmin(user:any){if(!user||!['admin','moderator'].includes(user.role))throw Object.assign(new Error('Нет прав'),{status:403});return user;}
-function parseError(error:unknown){const e=error as Error & {status?:number};return reply({error:e.message||'Ошибка запроса'},e.status||500);}
+function parseError(error:unknown){const e=error as Error & {status?:number};const status=Number.isInteger(e.status)&&(e.status??0)>=400&&(e.status??0)<500?e.status!:500;if(status===500)console.error('[screenly:v1] Internal request failed:',e);return reply({error:status===500?'Внутренняя ошибка сервера':e.message||'Ошибка запроса'},status);}
 async function guard(request:NextRequest, post=false){
  if(post&&!sameOrigin(request))throw Object.assign(new Error('Недопустимый источник запроса'),{status:403});
  if(!await isAuthorized())throw Object.assign(new Error('Сначала войди по коду тестировщика'),{status:401});
  const size=Number(request.headers.get('content-length')||'0');
  if(size>16000)throw Object.assign(new Error('Слишком большой запрос'),{status:413});
- const addr=request.headers.get('x-real-ip')||'local';
- if(limited(`v1:${post?'p':'g'}:${addr}`,post?100:500,60_000))throw Object.assign(new Error('Слишком много запросов'),{status:429});
+ const token=(await cookies()).get(USER_COOKIE)?.value;
+ const addr=token?createHash('sha256').update(token).digest('hex').slice(0,24):(request.headers.get('x-real-ip')||'guest');
+ if(limited(`v1:${post?'p':'g'}:${addr}`,post?100:500,60_000)||limited('v1:global',1800,60_000))throw Object.assign(new Error('Слишком много запросов'),{status:429});
 }
 async function bodyOf(req:NextRequest){
- try {return await req.json() as Record<string,any>;}catch {throw Object.assign(new Error('Неверный JSON'),{status:400});}
+ return await boundedJson(req) as Record<string,any>;
 }
 export async function GET(req:NextRequest,{params}:{params:Promise<{parts:string[]}>}){
  try {
@@ -35,6 +39,7 @@ export async function GET(req:NextRequest,{params}:{params:Promise<{parts:string
   case 'profile':return reply({profile:a.getProfile(q.get('username'),needUser(user).id)});
   case 'profiles/search':return reply({users:a.searchProfiles(q.get('q'),needUser(user).id)});
   case 'friends':return reply(a.friendsList(needUser(user).id));
+  case 'invites':return reply(a.listRoomInvites(needUser(user).id));
   case 'threads':return reply({threads:a.listThreads(needUser(user).id)});
   case 'messages':return reply(a.readMessages(needUser(user).id,q.get('peer')));
   case 'rooms':return reply({rooms:a.listRooms(needUser(user).id),mine:a.myRooms(user.id)});
@@ -49,15 +54,26 @@ export async function GET(req:NextRequest,{params}:{params:Promise<{parts:string
 }
 export async function POST(req:NextRequest,{params}:{params:Promise<{parts:string[]}>}){
  try {
+ const path=(await params).parts.join('/');
+ if(path==='rooms/close') {
+  await guard(req,true);
+  const body=await bodyOf(req);
+  const result=await withDatabase(async()=>{
+   const user=needUser(await currentUser());
+   return a.closeRoom(user.id,body.roomId,user.role==='admin');
+  },{write:true});
+  try {await disconnectClosedRoom(body.roomId);return reply({...result,disconnected:true});}
+  catch(error){console.error('[screenly:rooms] Database room closed, LiveKit disconnect failed:',error);return reply({...result,disconnected:false,warning:'Комната закрыта для новых подключений, но активная трансляция могла сохраниться.'});}
+ }
  return await withDatabase(async () => {
  await guard(req,true);const path=(await params).parts.join('/');const b=await bodyOf(req);const user=await currentUser();let out:any;
  switch(path){
   case 'register':{
-   if(limited('register:local',8,3600000))return reply({error:'Регистрация временно ограничена'},429);
+   if(limited(`register:${typeof b.email==='string'?b.email.trim().toLowerCase().slice(0,160):'invalid'}`,5,3600000)||limited('register:global',120,3600000))return reply({error:'Регистрация временно ограничена'},429);
    out=a.register(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,userCookieOptions());return res;
   }
   case 'login':{
-   if(limited('user-login:local',15,600000))return reply({error:'Слишком много попыток'},429);
+   if(limited(`user-login:${typeof b.email==='string'?b.email.trim().toLowerCase().slice(0,160):'invalid'}`,12,600000)||limited('user-login:global',400,600000))return reply({error:'Слишком много попыток'},429);
    out=a.login(b);const res=reply({ok:true,user:out.user});res.cookies.set(USER_COOKIE,out.token,userCookieOptions());return res;
   }
   case 'logout':{
@@ -78,6 +94,8 @@ export async function POST(req:NextRequest,{params}:{params:Promise<{parts:strin
    return reply(a.createRoom(uid,b,!user));
   }
   case 'rooms/close':return reply(a.closeRoom(needUser(user).id,b.roomId,user.role==='admin'));
+  case 'rooms/invite':return reply(a.inviteFriendToRoom(needUser(user).id,b.roomId,b.friendId));
+  case 'invites/dismiss':return reply(a.dismissRoomInvite(needUser(user).id,b.inviteId));
   case 'match/join':return reply(a.joinMatch(needUser(user).id,b.category||'all'));
   case 'match/cancel':return reply(a.cancelMatch(needUser(user).id));
   case 'projects/create':{

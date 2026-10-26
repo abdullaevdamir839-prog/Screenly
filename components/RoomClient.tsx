@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCategory, getGoal } from '@/lib/creator-categories.mjs';
-import { LiveKitRoom, RoomAudioRenderer, StartAudio, TrackToggle, useChat, useParticipants, useRoomContext, useTracks } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { LiveKitRoom, RoomAudioRenderer, StartAudio, TrackToggle, useChat, useConnectionState, useParticipants, useRoomContext, useTracks } from '@livekit/components-react';
+import { ConnectionState, Track } from 'livekit-client';
 import {
   ArrowLeft, ArrowRight, Check, Clipboard, Headphones, Info, Link2, LockKeyhole,
-  MessageCircle, Mic, MonitorPlay, MoreHorizontal, Send, ShieldCheck, Users, VideoOff, X, BookOpen, ExternalLink, MousePointer2, Pencil, LayoutGrid, Focus, Eraser, Lock, Unlock,
+  MessageCircle, Mic, MicOff, MonitorPlay, MoreHorizontal, Send, ShieldCheck, Users, VideoOff, X, BookOpen, ExternalLink, MousePointer2, Pencil, LayoutGrid, Focus, Eraser, Lock, Unlock, Undo2, Maximize2,
 } from 'lucide-react';
 
 import CollabScreenTile from './CollabScreenTile';
 import {useRoomCollaboration} from './useRoomCollaboration';
 
-type RoomDetails = {title:string; category:string; goal:string; projectTitle:string;projectUrl:string;learningPlan:string;description:string;visibility:string};
+type RoomDetails = {ownerId:string;title:string; category:string; goal:string; projectTitle:string;projectUrl:string;learningPlan:string;description:string;visibility:string};
 type Props = { roomId: string; invite: string; details: RoomDetails };
 type Credentials = { token: string; serverUrl: string };
 
@@ -62,19 +62,22 @@ export default function RoomClient({roomId,invite,details}:Props) {
         onDisconnected={()=>{setCreds(null);setError('Соединение завершено. При необходимости войдите снова.');}}
         onError={err=>setError(err.message)}>
         <RoomAudioRenderer/><StartAudio label="Разрешить воспроизведение звука"/>
-        <RoomExperience details={details} onLeave={()=>{setCreds(null);router.push('/');}}/>
+        <RoomExperience roomId={roomId} details={details} onLeave={()=>{setCreds(null);router.push('/');}}/>
       </LiveKitRoom>}
     {error && creds && <div className="toast-error" role="alert">{error}</div>}
     </div>;
 }
 
-function RoomExperience({onLeave,details}:{onLeave:()=>void;details:RoomDetails}) {
+function RoomExperience({onLeave,details,roomId}:{onLeave:()=>void;details:RoomDetails;roomId:string}) {
   const room=useRoomContext();
+  const connection=useConnectionState();
   const participants=useParticipants();
   const tracks=useTracks([Track.Source.ScreenShare]);
   const {chatMessages,send,isSending}=useChat();
   const [chatInput,setChatInput]=useState('');
   const [showChat,setShowChat]=useState(true);
+  const [showMembers,setShowMembers]=useState(true);
+  const [unread,setUnread]=useState(0);
   const [screenOn,setScreenOn]=useState(false);
   const [screenLayout,setScreenLayout]=useState<'focus'|'grid'>('focus');
   const [micOn,setMicOn]=useState(false);
@@ -85,14 +88,20 @@ function RoomExperience({onLeave,details}:{onLeave:()=>void;details:RoomDetails}
   const [reportCategory,setReportCategory]=useState('harassment');
   const [reportState,setReportState]=useState('');
   const scrollRef=useRef<HTMLDivElement>(null);
+  const stageRef=useRef<HTMLDivElement>(null);
+  const previousMessageCount=useRef(0);
   useEffect(()=>{scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'});},[chatMessages.length]);
+  useEffect(()=>{const count=chatMessages.length;if(!showChat&&count>previousMessageCount.current)setUnread(n=>n+count-previousMessageCount.current);if(showChat)setUnread(0);previousMessageCount.current=count;},[chatMessages.length,showChat]);
   const selected=tracks.find(t=>t.publication.trackSid===activeTrack) || tracks.find(t=>t.participant.identity!==room.localParticipant.identity) || tracks[0];
   const streamOwners=tracks.map(t=>t.participant.identity);
   const collaboration=useRoomCollaboration(room,streamOwners);
   const owner=room.localParticipant.identity;
+  const isRoomHost=owner.startsWith(`${details.ownerId}.`);
   const ownScreen=tracks.some(t=>t.participant.identity===owner);
   const canCollaborate=streamOwners.some(id=>collaboration.permissions[id]);
   const visibleTracks=screenLayout==='grid'?tracks.slice(0,4):(selected?[selected]:[]);
+  const selectedOwner=selected?.participant.identity;
+  const canUndo=!!selectedOwner&&!!collaboration.permissions[selectedOwner]&&(collaboration.strokes[selectedOwner]||[]).some(s=>s.sender===owner);
   const names=Object.fromEntries(participants.map(p=>[p.identity,p.name||'Участник']));
 
   async function submitChat(event:React.FormEvent<HTMLFormElement>) {
@@ -122,13 +131,20 @@ function RoomExperience({onLeave,details}:{onLeave:()=>void;details:RoomDetails}
     }catch(e){setError(e instanceof Error?e.message:'Ошибка блокировки');}
   }
   function leave() { void room.disconnect(); onLeave(); }
+  async function fullscreenStage(){try {if(document.fullscreenElement)await document.exitFullscreen();else await stageRef.current?.requestFullscreen();}catch {setError('Браузер не разрешил полноэкранный режим.');}}
+  async function closeMyRoom(){
+    if(!isRoomHost||!window.confirm('Закрыть комнату для новых подключений?'))return;
+    try {const response=await fetch('/api/v1/rooms/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roomId})});const result=await response.json();if(!response.ok)throw new Error(result.error||'Не удалось закрыть комнату');if(result.disconnected===false&&result.warning)window.alert(result.warning);leave();}
+    catch(e){setError(e instanceof Error?e.message:'Ошибка закрытия комнаты');}
+  }
 
   return <main className="room-shell shell">
-    <div className="room-top"><div><span className="section-kicker">{getCategory(details.category)?.label||'КОМНАТА'} · {getGoal(details.goal)?.label||'Общение'}</span><h1>{details.title}</h1><p>{details.description||'Показывайте идеи, создавайте проекты и учитесь вместе.'}</p></div><div className="room-online"><span className="pulse-dot"/> На связи <strong>{participants.length}</strong></div></div>
+    <div className="room-top"><div><span className="section-kicker">{getCategory(details.category)?.label||'КОМНАТА'} · {getGoal(details.goal)?.label||'Общение'}</span><h1>{details.title}</h1><p>{details.description||'Показывайте идеи, создавайте проекты и учитесь вместе.'}</p></div><div className="room-online"><span className="pulse-dot"/> На связи <strong>{participants.length}</strong>{isRoomHost&&<span className="host-badge"><ShieldCheck size={13}/> Организатор</span>}</div></div>
+    {connection!==ConnectionState.Connected&&<div className="room-connection-alert" role="status">{connection===ConnectionState.Reconnecting?'Связь прервалась. Восстанавливаем подключение…':connection===ConnectionState.Connecting?'Подключаемся к комнате…':'Соединение с комнатой неактивно.'}</div>}
     {(details.learningPlan||details.projectTitle||details.projectUrl)&&<div className="room-learning-inline"><BookOpen size={19}/><div><strong>{details.projectTitle||'Мастерская'}</strong>{details.learningPlan&&<p>{details.learningPlan}</p>}</div>{details.projectUrl&&<a href={details.projectUrl} target="_blank" rel="nofollow noreferrer noopener">Открыть проект <ExternalLink size={15}/></a>}</div>}
     <div className="room-grid">
       <section className="stage-column">
-        <div className="stage-card collab-stage"><div className="stage-toolbar"><span className="stage-label"><span className="stage-live-dot"/>{selected?'СОВМЕСТНАЯ ДЕМОНСТРАЦИЯ':'ОЖИДАНИЕ ТРАНСЛЯЦИИ'}</span><span className="stage-owner">{screenLayout==='grid'?'До 4 экранов одновременно':selected?(selected.participant.name||'Гость'):'Комната защищена'}</span></div>
+        <div className="stage-card collab-stage" ref={stageRef}><div className="stage-toolbar"><span className="stage-label"><span className="stage-live-dot"/>{selected?'СОВМЕСТНАЯ ДЕМОНСТРАЦИЯ':'ОЖИДАНИЕ ТРАНСЛЯЦИИ'}</span><span className="stage-owner">{screenLayout==='grid'?'До 4 экранов одновременно':selected?(selected.participant.name||'Гость'):'Комната защищена'}</span><button className="stage-fullscreen" type="button" onClick={()=>void fullscreenStage()} title="На весь экран" aria-label="Переключить полноэкранный режим"><Maximize2 size={16}/></button></div>
           {visibleTracks.length ? <div className={`collab-screen-grid ${screenLayout==='grid'?'collab-screen-grid-multi':''}`}>
             {visibleTracks.map(t=><CollabScreenTile key={t.publication.trackSid} trackRef={t} owner={t.participant.identity} currentUser={owner} names={names}
               strokes={collaboration.strokes[t.participant.identity]||[]} cursors={Object.values(collaboration.cursors).filter(c=>c.stream===t.participant.identity)}
@@ -145,6 +161,7 @@ function RoomExperience({onLeave,details}:{onLeave:()=>void;details:RoomDetails}
           <div className="collab-toolbar-actions"><button type="button" className={collaboration.tool==='off'?'active':''} onClick={()=>collaboration.setTool('off')}><Lock size={15}/> Просмотр</button>
             <button type="button" disabled={!canCollaborate} className={collaboration.tool==='pointer'?'active':''} onClick={()=>collaboration.setTool('pointer')}><MousePointer2 size={15}/> Указка</button>
             <button type="button" disabled={!canCollaborate} className={collaboration.tool==='draw'?'active':''} onClick={()=>collaboration.setTool('draw')}><Pencil size={15}/> Рисовать</button>
+            <button type="button" disabled={!canUndo} onClick={()=>selectedOwner&&collaboration.undoMyStroke(selectedOwner)} title="Отменить свой последний штрих на выбранном экране"><Undo2 size={15}/> Отменить штрих</button>
             {ownScreen&&<button type="button" className={`collab-owner-toggle ${collaboration.permissions[owner]?'active':''}`} onClick={()=>collaboration.allowAnnotations(!collaboration.permissions[owner])}>{collaboration.permissions[owner]?<Unlock size={15}/>:<Lock size={15}/>} {collaboration.permissions[owner]?'Запретить пометки':'Разрешить пометки'}</button>}
             {ownScreen&&<button type="button" className="collab-clear" onClick={()=>collaboration.clearDrawing(owner)}><Eraser size={15}/> Очистить мой экран</button>}
           </div><p>Каждый ведущий разрешает пометки только на своём экране. Участники могут показывать свои экраны одновременно.</p>
@@ -154,7 +171,7 @@ function RoomExperience({onLeave,details}:{onLeave:()=>void;details:RoomDetails}
             <TrackToggle source={Track.Source.Microphone} initialState={false} onChange={(on)=>setMicOn(on)} className={`room-control ${micOn?'enabled':''}`} showIcon={false}><Mic size={19}/><span>{micOn?'Микрофон включён':'Включить микрофон'}</span></TrackToggle>
             <TrackToggle source={Track.Source.ScreenShare} initialState={false} onChange={(on)=>{setScreenOn(on);if(!on)collaboration.allowAnnotations(false);}} className={`room-control ${screenOn?'sharing':''}`} showIcon={false}><MonitorPlay size={19}/><span>{screenOn?'Остановить показ':'Показать экран'}</span></TrackToggle>
           </div>
-          <div className="room-controls-right"><button className="room-control icon-only hide-desktop" onClick={()=>setShowChat(v=>!v)} aria-label="Показать или скрыть чат"><MessageCircle size={20}/></button><button className="leave-control" onClick={leave}><VideoOff size={18}/><span>Выйти</span></button></div>
+          <div className="room-controls-right"><button className="room-control icon-only hide-desktop" onClick={()=>setShowChat(v=>!v)} aria-label="Показать или скрыть чат"><MessageCircle size={20}/>{unread>0&&<span className="room-unread">{Math.min(99,unread)}</span>}</button>{isRoomHost&&<button className="room-control room-end-button" onClick={()=>void closeMyRoom()}><Lock size={17}/><span>Закрыть комнату</span></button>}<button className="leave-control" onClick={leave}><VideoOff size={18}/><span>Выйти</span></button></div>
         </div>
         {error && <div className="room-error" role="alert">{error}</div>}
         <div className="room-safety"><Info size={17}/><span>Демонстрация доступна только после вашего разрешения. Не показывайте пароли, личные переписки и платёжные данные.</span></div>
@@ -167,7 +184,7 @@ function RoomExperience({onLeave,details}:{onLeave:()=>void;details:RoomDetails}
         <form className="chat-compose" onSubmit={submitChat}><label className="visually-hidden" htmlFor="chat-message">Сообщение</label><input id="chat-message" placeholder="Напишите сообщение…" maxLength={500} value={chatInput} onChange={e=>setChatInput(e.target.value)}/><button type="submit" disabled={!chatInput.trim()||isSending} aria-label="Отправить сообщение"><Send size={19}/></button></form>
       </aside>
     </div>
-    <div className="members-list"><span className="members-label">УЧАСТНИКИ</span><div className="members-row">{participants.map((p,index)=><div className="member-chip" key={p.identity}><span className={`member-avatar tone-${index%4}`}>{(p.name||'?').slice(0,1).toUpperCase()}</span><span>{p.name||'Гость'}</span>{p.identity===room.localParticipant.identity?<small>вы</small>:<><button className="report-mini" onClick={()=>setReportTarget({id:p.identity.includes('.')?p.identity.split('.')[0]:`guest:${p.identity}`,name:p.name||'Участник'})} title="Пожаловаться на пользователя">Пожаловаться</button>{/^[a-f0-9-]{36}\.[a-f0-9-]{36}$/.test(p.identity)&&<button className="report-mini" onClick={()=>void blockAndLeave(p.identity,p.name||'Участник')} title="Заблокировать пользователя и покинуть комнату">Заблокировать</button>}</>}</div>)}</div>
+    <div className="members-list"><button type="button" className="members-heading-toggle" onClick={()=>setShowMembers(v=>!v)} aria-expanded={showMembers}><span className="members-label">УЧАСТНИКИ · {participants.length}</span><span>{showMembers?'Свернуть':'Показать'}</span></button>{showMembers&&<div className="members-row">{participants.map((p,index)=><div className="member-chip" key={p.identity}><span className={`member-avatar tone-${index%4}`}>{(p.name||'?').slice(0,1).toUpperCase()}</span><span>{p.name||'Гость'}</span>{p.identity===room.localParticipant.identity?<small>вы</small>:<><button className="report-mini" onClick={()=>setReportTarget({id:p.identity.includes('.')?p.identity.split('.')[0]:`guest:${p.identity}`,name:p.name||'Участник'})} title="Пожаловаться на пользователя">Пожаловаться</button>{/^[a-f0-9-]{36}\.[a-f0-9-]{36}$/.test(p.identity)&&<button className="report-mini" onClick={()=>void blockAndLeave(p.identity,p.name||'Участник')} title="Заблокировать пользователя и покинуть комнату">Заблокировать</button>}</>}</div>)}</div>}
     {reportState&&<p className="room-safety" role="status">{reportState}</p>}
     {reportTarget&&<form className="room-report-form" onSubmit={submitReport}><strong>Жалоба на {reportTarget.name}</strong><select value={reportCategory} onChange={e=>setReportCategory(e.target.value)}><option value="harassment">Оскорбления и травля</option><option value="inappropriate">Недопустимая трансляция</option><option value="spam">Спам</option><option value="minor_safety">Безопасность несовершеннолетних</option><option value="other">Другое</option></select><textarea required minLength={8} maxLength={700} value={reportReason} onChange={e=>setReportReason(e.target.value)} placeholder="Опиши, что произошло"/><div><button type="button" onClick={()=>setReportTarget(null)}>Отмена</button><button type="submit">Отправить жалобу</button></div></form>}
     </div>

@@ -5,7 +5,7 @@ services:
     name: screenly-private-beta
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run db:init && npm run start:hosted
     healthCheckPath: /api/health
     envVars:
